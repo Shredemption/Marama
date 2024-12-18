@@ -1,6 +1,7 @@
 #include "shader.h"
 
 #include <file_manager/file_manager.h>
+#include <glm/gtc/type_ptr.hpp>
 
 std::unordered_map<std::string, Shader> Shader::loadedShaders;
 std::string Shader::lastShader;
@@ -21,14 +22,14 @@ Shader Shader::load(const std::string &shaderName)
         loadedShaders.emplace(shaderName, shader);
 
         if (shaderName == "water")
-        {  
+        {
             waterLoaded = true;
         }
     }
 
     shader = loadedShaders[shaderName];
     shader.use();
-    
+
     return shader;
 }
 
@@ -107,6 +108,11 @@ void Shader::setMat3(const std::string &name, const glm::mat3 &mat) const
 void Shader::setMat4(const std::string &name, const glm::mat4 &mat) const
 {
     glUniformMatrix4fv(glGetUniformLocation(m_id, name.c_str()), 1, GL_FALSE, &mat[0][0]);
+}
+
+void Shader::setMat4Array(const std::string &name, const std::vector<glm::mat4> &mats) const
+{
+    glUniformMatrix4fv(glGetUniformLocation(m_id, name.c_str()), mats.size(), GL_FALSE, glm::value_ptr(mats[0]));
 }
 
 void Shader::compile()

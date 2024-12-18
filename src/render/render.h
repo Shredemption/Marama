@@ -19,7 +19,7 @@ private:
     static void renderSceneUnitPlanes(Scene &scene, glm::vec4 clipPlane);
     static void renderSceneSkyBox(Scene &scene);
 
-    static void renderModel(Model *model);
+    static void renderModel(ModelData model);
     static void renderMesh(Mesh mesh);
 
     static void renderDefault(Mesh mesh);

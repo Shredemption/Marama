@@ -4,6 +4,7 @@
 #include "camera/camera.h"
 
 #include <glm/gtc/matrix_transform.hpp>
+#include <glm/gtx/string_cast.hpp>
 
 glm::vec4 Render::clipPlane = glm::vec4(0, 0, 0, 0);
 
@@ -44,16 +45,16 @@ void Render::render(Scene &scene)
 {
     renderSceneSkyBox(scene);
 
-    if (Shader::waterLoaded && (EventHandler::frame % 2 == 0))
-    {
-        WaterPass = true;
-        renderReflectRefract(scene, clipPlane);
-        WaterPass = false;
-    }
+    // if (Shader::waterLoaded && (EventHandler::frame % 2 == 0))
+    // {
+    //     WaterPass = true;
+    //     renderReflectRefract(scene, clipPlane);
+    //     WaterPass = false;
+    // }
 
     clipPlane = {0, 0, 0, 0};
     renderSceneModels(scene, clipPlane);
-    renderSceneUnitPlanes(scene, clipPlane);
+    // renderSceneUnitPlanes(scene, clipPlane);
 
     // renderTestQuad(FrameBuffer::reflectionFBO.colorTexture, 0, 0);
     // renderTestQuad(FrameBuffer::refractionFBO.colorTexture, 2 * EventHandler::screenWidth / 3, 0);
@@ -83,7 +84,14 @@ void Render::renderSceneModels(Scene &scene, glm::vec4 clipPlane)
 
         shader.setVec4("location_plane", clipPlane);
 
-        renderModel(model.model);
+        if (model.model->boneHierarchy.size() > 0)
+        {
+            model.model->updateBoneTransforms();
+            shader.setMat4Array("u_boneTransforms", model.model->boneTransforms);
+            shader.setMat4Array("inverse_offset", model.model->boneInverseOffsets);
+        }
+
+        renderModel(model);
     }
 }
 
@@ -167,11 +175,12 @@ void Render::renderSceneSkyBox(Scene &scene)
     glBindVertexArray(0);
 }
 
-void Render::renderModel(Model *model)
+void Render::renderModel(ModelData model)
 {
-    for (unsigned int i = 0; i < model->meshes.size(); i++)
-
-        Render::renderMesh(model->meshes[i]);
+    for (unsigned int i = 0; i < model.model->meshes.size(); i++)
+    {
+        Render::renderMesh(model.model->meshes[i]);
+    }
 }
 
 // Render mesh
@@ -220,6 +229,7 @@ void Render::renderDefault(Mesh mesh)
             glBindTexture(GL_TEXTURE_2D, mesh.textures[i].id);
         }
     }
+
     // Unload texture
     glActiveTexture(GL_TEXTURE0);
 

@@ -1,5 +1,6 @@
 #include <model/model.h>
 #include <scene/scene.h>
+#include <event_handler/event_handler.h>
 
 #include <assimp/postprocess.h>
 #include <jsoncons/json.hpp>
@@ -10,6 +11,8 @@
 #define STB_IMAGE_IMPLEMENTATION
 #include <stb_image.h>
 
+#include <glm/gtx/string_cast.hpp>
+
 std::unordered_map<std::string, CachedTexture> Model::textureCache;
 std::map<std::string, std::string> Model::modelMap;
 
@@ -17,10 +20,6 @@ std::map<std::string, std::string> Model::modelMap;
 Model::Model(std::string const &path, std::string shaderName)
 {
     loadModel(path, shaderName);
-}
-Model::Model(std::string const &path)
-{
-    loadModel(path, "default");
 }
 
 // Model Destructor
@@ -76,24 +75,47 @@ void Model::loadModel(std::string path, std::string shaderName)
     // Open full node recursion
     directory = path.substr(0, path.find_last_of('/'));
     processNode(scene->mRootNode, scene, shaderName);
+
+    updateBoneTransforms();
 }
 
-void Model::processNode(aiNode *node, const aiScene *scene, std::string shaderName)
+void Model::processNode(aiNode *node, const aiScene *scene, std::string shaderName, Bone *parentBone)
 {
-    // Process node's meshes
-    for (unsigned int i = 0; i < node->mNumMeshes; i++)
+    std::string nodeName = node->mName.C_Str();
+
+    if (nodeName.rfind("Armature", 0) == 0)
     {
-        aiMesh *mesh = scene->mMeshes[node->mMeshes[i]];
-        meshes.push_back(processMesh(mesh, scene, shaderName));
+        Bone *currentBone = new Bone(nodeName, boneHierarchy.size(), glm::mat4(1.0f));
+        boneHierarchy.emplace(nodeName, currentBone);
+
+        if (parentBone)
+        {
+            parentBone->children.push_back(currentBone);
+            currentBone->parent = parentBone;
+        }
+        else
+        {
+            rootBones.push_back(currentBone);
+        }
     }
-    // Repeat for children
-    for (unsigned int i = 0; i < node->mNumChildren; i++)
+    else
     {
-        processNode(node->mChildren[i], scene, shaderName);
+        for (unsigned int i = 0; i < node->mNumMeshes; i++)
+        {
+            unsigned int meshIndex = node->mMeshes[i];
+            aiMesh *mesh = scene->mMeshes[meshIndex];
+            meshes.push_back(processMesh(mesh, scene, shaderName, boneHierarchy));
+        }
+    }
+
+    // Recursively process children
+    for (unsigned int i = 0; i < node->mNumChildren; ++i)
+    {
+        processNode(node->mChildren[i], scene, shaderName, boneHierarchy[nodeName]);
     }
 }
 
-Mesh Model::processMesh(aiMesh *mesh, const aiScene *scene, std::string shaderName)
+Mesh Model::processMesh(aiMesh *mesh, const aiScene *scene, std::string shaderName, std::map<std::string, Bone *> &boneHierarchy)
 {
     std::vector<Vertex> vertices;
     std::vector<unsigned int> indices;
@@ -179,7 +201,55 @@ Mesh Model::processMesh(aiMesh *mesh, const aiScene *scene, std::string shaderNa
         }
     }
 
-    return Mesh(vertices, indices, textures, shaderName);
+    // Process Bone ID's
+    for (unsigned int i = 0; i < mesh->mNumBones; i++)
+    {
+        aiBone *bone = mesh->mBones[i];
+        std::string boneName = bone->mName.C_Str();
+
+        glm::mat4 offsetMatrix;
+        for (int row = 0; row < 4; ++row)
+        {
+            for (int col = 0; col < 4; ++col)
+            {
+                offsetMatrix[row][col] = bone->mOffsetMatrix[row][col]; // Copy the data
+            }
+        }
+
+        boneHierarchy[boneName]->offsetMatrix = glm::transpose(offsetMatrix);
+
+        int boneIndex = boneHierarchy[boneName]->index;
+
+        // Process weights per bone
+        for (unsigned int j = 0; j < bone->mNumWeights; j++)
+        {
+            aiVertexWeight weight = bone->mWeights[j];
+            int vertexID = weight.mVertexId;
+            float weightValue = weight.mWeight;
+
+            // Add this bone's influence to the vertex
+            auto &vertex = vertices[vertexID];
+            for (int k = 0; k < 4; k++)
+            {
+                if (vertex.Weights[k] == 0.0f)
+                { // Find an empty slot
+                    vertex.BoneIDs[k] = boneIndex;
+                    vertex.Weights[k] = weightValue;
+                    break;
+                }
+            }
+        }
+    }
+
+    // Remove "Scene" bone if it is present
+    auto it = boneHierarchy.find("Scene");
+    if (it != boneHierarchy.end())
+    {
+        boneHierarchy.erase(it); // Remove the "Scene" bone from the hierarchy
+    }
+
+    Mesh loadedMesh = Mesh(vertices, indices, textures, shaderName);
+    return loadedMesh;
 }
 
 std::vector<Texture> Model::loadMaterialTexture(aiMaterial *mat, aiTextureType type, std::string typeName)
@@ -380,4 +450,40 @@ unsigned int Model::LoadSkyBoxTexture(SkyBoxData skybox)
     glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE);
 
     return textureID;
+}
+
+void Model::updateBoneTransforms()
+{
+
+    // Resize if matrix array not large enough
+    if (boneTransforms.size() != boneHierarchy.size())
+    {
+        boneTransforms.resize(boneHierarchy.size(), glm::mat4(1.0f));
+        boneInverseOffsets.resize(boneHierarchy.size(), glm::mat4(1.0f));
+    }
+
+    for (auto &rootBone : rootBones)
+    {
+        // Start recursion from the root bone, with identity matrix for the root's parent transform
+        updateBoneTransformsRecursive(rootBone, glm::mat4(1.0f));
+    }
+}
+
+void Model::updateBoneTransformsRecursive(Bone *bone, const glm::mat4 &parentTransform)
+{
+
+    // Compute the global transform of the current bone
+    bone->transform = glm::rotate(glm::mat4(1.0f), glm::radians(EventHandler::time), glm::vec3(0.0f, 1.0f, 0.0f));
+    // bone->transform = glm::mat4(1.0f);
+
+    bone->globalTransform = parentTransform * bone->transform;
+
+    boneTransforms[bone->index] = bone->offsetMatrix * bone->globalTransform;
+    boneInverseOffsets[bone->index] = glm::inverse(bone->offsetMatrix);
+
+    // Recursively update the transforms of the child bones
+    for (Bone *child : bone->children)
+    {
+        updateBoneTransformsRecursive(child, bone->globalTransform);
+    }
 }

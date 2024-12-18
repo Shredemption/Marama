@@ -7,6 +7,7 @@ in VS_OUT
     vec3 Normal;
     vec2 TexCoords;
     vec3 lightDir;
+    vec3 color;
 }
 fs_in;
 
@@ -22,7 +23,7 @@ struct Material
 
 uniform Material material;
 
-const float ambientLight = 0.5;
+const float ambientLight = 0.8;
 
 void main()
 {
@@ -34,7 +35,9 @@ void main()
 
     vec3 diffuse = dot(fs_in.Normal, fs_in.lightDir) * lightCol * lightIntensity;
 
-    vec3 outputColor = albedo * (ambientLight + diffuse);
+    vec3 outputColor = albedo * (ambientLight + 0.5 * diffuse);
 
     FragColor = vec4(outputColor, 1.0);  // Output final color
+
+    // FragColor = vec4(fs_in.color, 1);
 }
