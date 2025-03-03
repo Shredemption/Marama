@@ -61,7 +61,6 @@ Model::~Model()
 void Model::loadModel(std::string path, std::string shaderName)
 {
     // Define importer and open file
-    Assimp::Importer importer;
     const aiScene *scene = importer.ReadFile(path, aiProcess_Triangulate | aiProcess_FlipUVs | aiProcess_CalcTangentSpace | aiProcess_GenNormals);
 
     // If scene null, scene flagged as incomplete, or root node null
@@ -85,17 +84,16 @@ void Model::processNode(aiNode *node, const aiScene *scene, std::string shaderNa
 
     if (nodeName.rfind("Armature", 0) == 0)
     {
-        Bone *currentBone = new Bone(nodeName, boneHierarchy.size(), glm::mat4(1.0f));
-        boneHierarchy.emplace(nodeName, currentBone);
+        boneHierarchy.emplace(nodeName, std::make_unique<Bone>(nodeName, boneHierarchy.size(), glm::mat4(1.0f)));
 
         if (parentBone)
         {
-            parentBone->children.push_back(currentBone);
-            currentBone->parent = parentBone;
+            parentBone->children.push_back(boneHierarchy[nodeName].get());
+            boneHierarchy[nodeName].get()->parent = parentBone;
         }
         else
         {
-            rootBones.push_back(currentBone);
+            rootBones.push_back(boneHierarchy[nodeName].get());
         }
     }
     else
@@ -111,11 +109,11 @@ void Model::processNode(aiNode *node, const aiScene *scene, std::string shaderNa
     // Recursively process children
     for (unsigned int i = 0; i < node->mNumChildren; ++i)
     {
-        processNode(node->mChildren[i], scene, shaderName, boneHierarchy[nodeName]);
+        processNode(node->mChildren[i], scene, shaderName, boneHierarchy[nodeName].get());
     }
 }
 
-Mesh Model::processMesh(aiMesh *mesh, const aiScene *scene, std::string shaderName, std::map<std::string, Bone *> &boneHierarchy)
+Mesh Model::processMesh(aiMesh *mesh, const aiScene *scene, std::string shaderName, std::map<std::string, std::unique_ptr<Bone>> &boneHierarchy)
 {
     std::vector<Vertex> vertices;
     std::vector<unsigned int> indices;

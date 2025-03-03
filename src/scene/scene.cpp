@@ -94,7 +94,7 @@ void Scene::loadModelToScene(JSONModel model)
 
     loadModel.shader = model.shader;
 
-    structModels.push_back(loadModel);
+    this->structModels.push_back(loadModel);
 }
 
 void Scene::loadUnitPlaneToScene(JSONUnitPlane unitPlane)
