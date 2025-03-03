@@ -10,6 +10,7 @@
 #include <unordered_map>
 #include <map>
 #include <vector>
+#include <memory>
 
 // Keep count of how many times cached texture is used
 struct CachedTexture
@@ -26,10 +27,12 @@ public:
     // Model Constructor
     Model(std::string const &path, std::string shaderName = "default");
 
-    std::map<std::string, Bone *> boneHierarchy;
+    std::map<std::string, std::unique_ptr<Bone>> boneHierarchy;
     std::vector<glm::mat4> boneTransforms;
     std::vector<glm::mat4> boneInverseOffsets;
     std::vector<Bone *> rootBones;
+
+    Assimp::Importer importer;
 
     // Model Destructor
     ~Model();
@@ -62,7 +65,7 @@ private:
     void processNode(aiNode *node, const aiScene *scene, std::string shaderName, Bone *parentBone = nullptr);
 
     // Mesh Processor
-    Mesh processMesh(aiMesh *mesh, const aiScene *scene, std::string shaderName, std::map<std::string, Bone *> &boneHierarchy);
+    Mesh processMesh(aiMesh *mesh, const aiScene *scene, std::string shaderName, std::map<std::string, std::unique_ptr<Bone>> &boneHierarchy);
 
     // Material Texture Loader
     std::vector<Texture> loadMaterialTexture(aiMaterial *mat, aiTextureType type, std::string typeName);

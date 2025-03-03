@@ -42,7 +42,7 @@ void main()
         if(weight > 0.0)
         {
             // Apply the bone transform to the vertex position and normal
-            vec4 boneSpacePosition = inverse_offset[boneID] * vec4(aPos, 1);
+            vec4 boneSpacePosition = inverse_offset[boneID] * vec4(aPos, 0);
             finalPosition += u_boneTransforms[boneID] * boneSpacePosition * weight;
             finalNormal += mat3(u_boneTransforms[boneID]) * aNormal * weight; // Use the rotation part of the matrix for normal
         }

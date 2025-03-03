@@ -131,7 +131,11 @@ Mesh Mesh::genUnitPlane(glm::vec3 color, std::string shaderName)
         {0.f, 1.f},
     };
 
-    for (int i = 0; i < Positions.size(); i++)
+    vertices.resize(4);
+    Positions.resize(vertices.size());
+    TexCoords.resize(vertices.size());
+
+    for (int i = 0; i < vertices.size(); i++)
     {
         Vertex vertex;
         vertex.Position = Positions[i];
